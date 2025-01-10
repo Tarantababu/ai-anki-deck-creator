@@ -47,13 +47,17 @@ class SentenceGenerator:
             }}"""
         
         try:
-            response = openai.Completion.create(
-                model="text-davinci-003",
-                prompt=prompt,
+            # Use the updated model gpt-3.5-turbo
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",  # Updated model
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.7,
                 max_tokens=500,
             )
-            content = response.choices[0].text.strip()
+            content = response.choices[0].message['content'].strip()
             return json.loads(content)
         except openai.error.OpenAIError as e:
             st.error(f"OpenAI API Error: {str(e)}")
