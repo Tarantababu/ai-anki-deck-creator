@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI, APIError
+import openai
 import json
 import genanki
 from gtts import gTTS
@@ -7,15 +7,14 @@ import os
 import random
 from tempfile import NamedTemporaryFile
 import pandas as pd
+from openai.error import APIError
+
 
 class SentenceGenerator:
     def __init__(self, api_key):
         try:
-            # Initialize the OpenAI client with the API key
-            self.client = OpenAI(
-                api_key=api_key,
-                timeout=60.0  # Set a longer timeout
-            )
+            # Set the OpenAI API key
+            openai.api_key = api_key
             self.model_name = "gpt-3.5-turbo"
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
@@ -32,26 +31,43 @@ class SentenceGenerator:
                     "translation": "",
                     "context": "",
                     "tags": []
+                }},
+                {{
+                    "id": 2,
+                    "sentence": "",
+                    "translation": "",
+                    "context": "",
+                    "tags": []
+                }},
+                {{
+                    "id": 3,
+                    "sentence": "",
+                    "translation": "",
+                    "context": "",
+                    "tags": []
                 }}
             ]
         }}"""
         
         try:
-            response = self.client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=500,
-                response_format={ "type": "text" }
+                max_tokens=500
             )
-            content = response.choices[0].message.content
+            content = response.choices[0].message['content']
             return json.loads(content)
+        except (IndexError, KeyError, json.JSONDecodeError) as e:
+            st.error(f"Error parsing API response: {str(e)}")
+            return None
         except APIError as e:
             st.error(f"OpenAI API Error: {str(e)}")
             return None
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
             return None
+
 
 class AnkiDeckCreator:
     def __init__(self):
@@ -116,6 +132,7 @@ class AnkiDeckCreator:
                 
         return output_file
 
+
 def initialize_session_state():
     """Initialize session state variables"""
     if 'generated_sets' not in st.session_state:
@@ -126,6 +143,7 @@ def initialize_session_state():
         st.session_state.api_key = None
     if 'sentence_gen' not in st.session_state:
         st.session_state.sentence_gen = None
+
 
 def main():
     st.title("Anki Language Sentence Generator")
@@ -159,7 +177,7 @@ def main():
             if st.session_state.generated_sets:
                 st.subheader("Generated Sentence Sets")
                 for idx, sentences_data in enumerate(st.session_state.generated_sets):
-                    st.write(f"Set {idx + 1} - Word/Phrase: {sentences_data['sentences'][0]['sentence'].split()[0]}")
+                    st.write(f"Set {idx + 1}")
                     
                     # Create a DataFrame for better display
                     df_data = []
@@ -205,6 +223,7 @@ def main():
         except Exception as e:
             st.error(f"Error: {str(e)}")
             st.info("Please check your API key and try again.")
+
 
 if __name__ == "__main__":
     main()
