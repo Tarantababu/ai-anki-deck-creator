@@ -1,21 +1,23 @@
 import streamlit as st
-import openai
+from openai import openai
 import json
 import genanki
 from gtts import gTTS
 import os
 import random
+import shutil
 from tempfile import NamedTemporaryFile
 import pandas as pd
 
 class SentenceGenerator:
-    def __init__(self, api_key):
-        if not api_key:
-            raise ValueError("API key is required.")
+    def __init__(self, api_key, language_pair):
+        self.api_key = api_key
         openai.api_key = api_key
-
-    def generate_sentences(self, word_or_phrase, language_pair="en-tr"):
-        if language_pair == "en-tr":
+        self.language_pair = language_pair
+        self.model_name = "gpt-3.5-turbo"
+    
+    def generate_sentences(self, word_or_phrase):
+        if self.language_pair == "en-tr":
             prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
             Format as JSON:
             {{
@@ -30,7 +32,7 @@ class SentenceGenerator:
                     }}
                 ]
             }}"""
-        elif language_pair == "de-tr":
+        elif self.language_pair == "de-tr":
             prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in German with Turkish translations.
             Format as JSON:
             {{
@@ -45,21 +47,16 @@ class SentenceGenerator:
                     }}
                 ]
             }}"""
-        
         try:
-            # Use the updated model gpt-3.5-turbo
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",  # Updated model
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ],
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=500,
+                max_tokens=500
             )
-            content = response.choices[0].message['content'].strip()
+            content = response.choices[0].message["content"]
             return json.loads(content)
-        except openai.error.OpenAIError as e:
+        except openai.error.APIError as e:
             st.error(f"OpenAI API Error: {str(e)}")
             return None
         except Exception as e:
@@ -100,7 +97,9 @@ class AnkiDeckCreator:
                 # Create audio file
                 audio_filename = f"sentence_{random.randrange(1 << 30, 1 << 31)}.mp3"
                 temp_audio = self.create_audio(sentence['sentence'])
-                os.rename(temp_audio, audio_filename)
+                
+                # Copy the file to the destination directory
+                shutil.copy(temp_audio, audio_filename)
                 media_files.append(audio_filename)
                 
                 note = genanki.Note(
@@ -149,32 +148,25 @@ def main():
     # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
     
-    # Language pair selection
-    language_pair = st.selectbox(
-        "Select language pair for sentence generation:",
-        ["English - Turkish", "German - Turkish"]
-    )
+    # Language pair input
+    language_pair = st.selectbox("Select language pair:", ["en-tr", "de-tr"])
     
-    language_map = {
-        "English - Turkish": "en-tr",
-        "German - Turkish": "de-tr"
-    }
-
     # Only proceed if API key is provided
     if api_key:
         try:
-            # Create new generator only if API key changes
-            if api_key != st.session_state.api_key:
-                st.session_state.sentence_gen = SentenceGenerator(api_key)
+            # Create new generator only if API key or language pair changes
+            if api_key != st.session_state.api_key or language_pair != st.session_state.language_pair:
+                st.session_state.sentence_gen = SentenceGenerator(api_key, language_pair)
                 st.session_state.api_key = api_key
-                st.success("API key validated successfully!")
+                st.session_state.language_pair = language_pair
+                st.success("API key and language pair validated successfully!")
             
             # Input word/phrase
             word = st.text_input("Enter a word or phrase:")
             
             if st.button("Generate Sentences"):
                 with st.spinner("Generating sentences..."):
-                    sentences_data = st.session_state.sentence_gen.generate_sentences(word, language_pair=language_map[language_pair])
+                    sentences_data = st.session_state.sentence_gen.generate_sentences(word)
                     if sentences_data:
                         st.session_state.generated_sets.append(sentences_data)
                         st.success("Sentences generated successfully!")
