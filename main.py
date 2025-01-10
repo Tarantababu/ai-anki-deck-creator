@@ -129,39 +129,27 @@ def main():
             # Input word/phrase
             word = st.text_input("Enter a word or phrase:")
             
-            # Define initial JSON prompt structure
-            initial_prompt = {
-                "language_pair": "en-tr",
-                "sentences": [
-                    {
-                        "id": 1,
-                        "sentence": f"Example sentence with '{word}'",
-                        "translation": "Örnek cümle",
-                        "context": "",
-                        "tags": []
-                    }
-                ]
-            }
-            
-            # Display the prompt as JSON
-            prompt_json = st.text_area("Edit the JSON prompt for sentence generation", 
-                                       json.dumps(initial_prompt, indent=4), 
-                                       height=300)
+            # Define initial editable sentence prompt
+            sentence_prompt = st.text_area(
+                "Edit the sentence generation prompt",
+                "Create 3 short, advanced level sentences using '{word_or_phrase}' in English with Turkish translations.",
+                height=150
+            )
             
             # Button to generate sentences with the edited prompt
             if st.button("Generate Sentences"):
                 with st.spinner("Generating sentences..."):
                     try:
-                        # Parse the JSON input from the user
-                        edited_prompt = json.loads(prompt_json)
+                        # Replace placeholder with actual word/phrase
+                        prompt = sentence_prompt.replace("{word_or_phrase}", word)
                         
-                        # Generate sentences using the edited prompt
-                        sentences_data = st.session_state.sentence_gen.generate_sentences(json.dumps(edited_prompt))
+                        # Generate sentences using the modified prompt
+                        sentences_data = st.session_state.sentence_gen.generate_sentences(prompt)
                         if sentences_data:
                             st.session_state.generated_sets.append(sentences_data)
                             st.success("Sentences generated successfully!")
-                    except json.JSONDecodeError as e:
-                        st.error(f"Invalid JSON format: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
             
             # Display all generated sets
             if st.session_state.generated_sets:
