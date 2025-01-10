@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+import openai
 import json
 import genanki
 from gtts import gTTS
@@ -13,7 +13,7 @@ class SentenceGenerator:
     def __init__(self, api_key):
         try:
             # Initialize the OpenAI client with the API key
-            self.client = OpenAI(api_key=api_key, timeout=60.0)  # Set a longer timeout
+            openai.api_key = api_key  # Use the correct OpenAI API client
             self.model_name = "gpt-3.5-turbo"
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
@@ -35,7 +35,7 @@ class SentenceGenerator:
         }}"""
         
         try:
-            response = self.client.completions.create(
+            response = openai.Completion.create(
                 model=self.model_name,
                 prompt=prompt,
                 temperature=0.7,
