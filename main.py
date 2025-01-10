@@ -19,7 +19,7 @@ class SentenceGenerator:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
         
     def generate_sentences(self, word_or_phrase):
-        prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
+        prompt = f"""Create 3 short, advanced level sentences using '{word_or_phrase}' in English with Turkish translations.
         Format as JSON:
         {{
             "language_pair": "en-tr",
