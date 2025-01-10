@@ -8,10 +8,10 @@ import random
 from tempfile import NamedTemporaryFile
 import pandas as pd
 
-openai.api_key = None  # Initialize with a default value
-
 class SentenceGenerator:
     def __init__(self, api_key):
+        if not api_key:
+            raise ValueError("API key is required.")
         openai.api_key = api_key
 
     def generate_sentences(self, word_or_phrase, language_pair="en-tr"):
