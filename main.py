@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+import openai  # Correct import statement
 import json
 import genanki
 from gtts import gTTS
@@ -12,7 +12,7 @@ import pandas as pd
 class SentenceGenerator:
     def __init__(self, api_key, language_pair):
         self.api_key = api_key
-        openai.api_key = api_key
+        openai.api_key = api_key  # Set the OpenAI API key
         self.language_pair = language_pair
         self.model_name = "gpt-3.5-turbo"
     
