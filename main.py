@@ -26,8 +26,20 @@ class SentenceGenerator:
                 temperature=0.7,
                 max_tokens=500,
             )
+            
+            # Logging response for debugging
+            st.write(f"API Response: {response}")
+            
+            # Extract content from the response and ensure it's correctly formatted
             content = response['choices'][0]['message']['content']
-            return json.loads(content)
+            
+            # Trying to parse the JSON content
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                st.error(f"Error parsing JSON: {str(e)}")
+                return None
+                
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
             return None
