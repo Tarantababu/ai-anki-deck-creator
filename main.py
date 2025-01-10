@@ -12,28 +12,12 @@ import pandas as pd
 class SentenceGenerator:
     def __init__(self, api_key):
         try:
-            # Initialize the OpenAI client with the API key
             openai.api_key = api_key  # Use the correct OpenAI API client
             self.model_name = "gpt-3.5-turbo"
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
         
-    def generate_sentences(self, word_or_phrase):
-        prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
-        Format as JSON:
-        {{
-            "language_pair": "en-tr",
-            "sentences": [
-                {{
-                    "id": 1,
-                    "sentence": "",
-                    "translation": "",
-                    "context": "",
-                    "tags": []
-                }}
-            ]
-        }}"""
-        
+    def generate_sentences(self, prompt):
         try:
             # Use the correct API method for the new version
             response = openai.ChatCompletion.create(
@@ -145,12 +129,39 @@ def main():
             # Input word/phrase
             word = st.text_input("Enter a word or phrase:")
             
+            # Define initial JSON prompt structure
+            initial_prompt = {
+                "language_pair": "en-tr",
+                "sentences": [
+                    {
+                        "id": 1,
+                        "sentence": f"Example sentence with '{word}'",
+                        "translation": "Örnek cümle",
+                        "context": "",
+                        "tags": []
+                    }
+                ]
+            }
+            
+            # Display the prompt as JSON
+            prompt_json = st.text_area("Edit the JSON prompt for sentence generation", 
+                                       json.dumps(initial_prompt, indent=4), 
+                                       height=300)
+            
+            # Button to generate sentences with the edited prompt
             if st.button("Generate Sentences"):
                 with st.spinner("Generating sentences..."):
-                    sentences_data = st.session_state.sentence_gen.generate_sentences(word)
-                    if sentences_data:
-                        st.session_state.generated_sets.append(sentences_data)
-                        st.success("Sentences generated successfully!")
+                    try:
+                        # Parse the JSON input from the user
+                        edited_prompt = json.loads(prompt_json)
+                        
+                        # Generate sentences using the edited prompt
+                        sentences_data = st.session_state.sentence_gen.generate_sentences(json.dumps(edited_prompt))
+                        if sentences_data:
+                            st.session_state.generated_sets.append(sentences_data)
+                            st.success("Sentences generated successfully!")
+                    except json.JSONDecodeError as e:
+                        st.error(f"Invalid JSON format: {str(e)}")
             
             # Display all generated sets
             if st.session_state.generated_sets:
