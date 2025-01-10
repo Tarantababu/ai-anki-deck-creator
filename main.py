@@ -1,64 +1,49 @@
 import streamlit as st
-import openai  # Correct import statement
+import openai
 import json
 import genanki
 from gtts import gTTS
 import os
 import random
-import shutil
 from tempfile import NamedTemporaryFile
+import shutil
 import pandas as pd
 
 class SentenceGenerator:
-    def __init__(self, api_key, language_pair):
-        self.api_key = api_key
-        openai.api_key = api_key  # Set the OpenAI API key
-        self.language_pair = language_pair
-        self.model_name = "gpt-3.5-turbo"
-    
-    def generate_sentences(self, word_or_phrase):
-        if self.language_pair == "en-tr":
-            prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
-            Format as JSON:
-            {{
-                "language_pair": "en-tr",
-                "sentences": [
-                    {{
-                        "id": 1,
-                        "sentence": "",
-                        "translation": "",
-                        "context": "",
-                        "tags": []
-                    }}
-                ]
-            }}"""
-        elif self.language_pair == "de-tr":
-            prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in German with Turkish translations.
-            Format as JSON:
-            {{
-                "language_pair": "de-tr",
-                "sentences": [
-                    {{
-                        "id": 1,
-                        "sentence": "",
-                        "translation": "",
-                        "context": "",
-                        "tags": []
-                    }}
-                ]
-            }}"""
+    def __init__(self, api_key):
         try:
+            # Initialize the OpenAI client with the API key
+            openai.api_key = api_key  # Use the correct OpenAI API client
+            self.model_name = "gpt-3.5-turbo"
+        except Exception as e:
+            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
+        
+    def generate_sentences(self, word_or_phrase):
+        prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
+        Format as JSON:
+        {{
+            "language_pair": "en-tr",
+            "sentences": [
+                {{
+                    "id": 1,
+                    "sentence": "",
+                    "translation": "",
+                    "context": "",
+                    "tags": []
+                }}
+            ]
+        }}"""
+        
+        try:
+            # Use the correct API method for the new version
             response = openai.ChatCompletion.create(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=500
+                max_tokens=500,
             )
-            content = response.choices[0].message["content"]
+            content = response['choices'][0]['message']['content']
             return json.loads(content)
-        except openai.error.APIError as e:
-            st.error(f"OpenAI API Error: {str(e)}")
-            return None
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
             return None
@@ -69,15 +54,15 @@ class AnkiDeckCreator:
             random.randrange(1 << 30, 1 << 31),
             'Sentence Model with Audio',
             fields=[
-                {'name': 'Sentence'},
-                {'name': 'Translation'},
+                {'name': 'English'},
+                {'name': 'Turkish'},
                 {'name': 'Context'},
                 {'name': 'Audio'}
             ],
             templates=[{
                 'name': 'Card 1',
-                'qfmt': '{{Sentence}}<br>{{Audio}}',
-                'afmt': '{{FrontSide}}<hr>{{Translation}}<br><br>Context: {{Context}}',
+                'qfmt': '{{English}}<br>{{Audio}}',
+                'afmt': '{{FrontSide}}<hr>{{Turkish}}<br><br>Context: {{Context}}',
             }]
         )
     
@@ -98,7 +83,7 @@ class AnkiDeckCreator:
                 audio_filename = f"sentence_{random.randrange(1 << 30, 1 << 31)}.mp3"
                 temp_audio = self.create_audio(sentence['sentence'])
                 
-                # Copy the file to the destination directory
+                # Copy the file to the desired location instead of renaming
                 shutil.copy(temp_audio, audio_filename)
                 media_files.append(audio_filename)
                 
@@ -148,18 +133,14 @@ def main():
     # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
     
-    # Language pair input
-    language_pair = st.selectbox("Select language pair:", ["en-tr", "de-tr"])
-    
     # Only proceed if API key is provided
     if api_key:
         try:
-            # Create new generator only if API key or language pair changes
-            if api_key != st.session_state.api_key or language_pair != st.session_state.language_pair:
-                st.session_state.sentence_gen = SentenceGenerator(api_key, language_pair)
+            # Create new generator only if API key changes
+            if api_key != st.session_state.api_key:
+                st.session_state.sentence_gen = SentenceGenerator(api_key)
                 st.session_state.api_key = api_key
-                st.session_state.language_pair = language_pair
-                st.success("API key and language pair validated successfully!")
+                st.success("API key validated successfully!")
             
             # Input word/phrase
             word = st.text_input("Enter a word or phrase:")
@@ -181,8 +162,8 @@ def main():
                     df_data = []
                     for sentence in sentences_data['sentences']:
                         df_data.append({
-                            'Sentence': sentence['sentence'],
-                            'Translation': sentence['translation'],
+                            'English': sentence['sentence'],
+                            'Turkish': sentence['translation'],
                             'Context': sentence['context']
                         })
                     df = pd.DataFrame(df_data)
