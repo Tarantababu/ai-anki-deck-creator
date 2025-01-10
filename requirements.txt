@@ -1,5 +1,5 @@
-streamlit
-openai==0.28
-genanki
-gtts
-pandas
+openai==1.0.0
+streamlit==1.10.0
+genanki==0.2.0
+gTTS==2.2.3
+pandas==1.5.3
