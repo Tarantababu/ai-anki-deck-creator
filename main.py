@@ -35,13 +35,14 @@ class SentenceGenerator:
         }}"""
         
         try:
-            response = openai.Completion.create(
+            # Use the correct API method for the new version
+            response = openai.ChatCompletion.create(
                 model=self.model_name,
-                prompt=prompt,
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=500,
             )
-            content = response['choices'][0]['text']
+            content = response['choices'][0]['message']['content']
             return json.loads(content)
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
