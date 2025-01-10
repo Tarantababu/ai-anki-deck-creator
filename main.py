@@ -12,12 +12,28 @@ import pandas as pd
 class SentenceGenerator:
     def __init__(self, api_key):
         try:
+            # Initialize the OpenAI client with the API key
             openai.api_key = api_key  # Use the correct OpenAI API client
             self.model_name = "gpt-3.5-turbo"
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
         
-    def generate_sentences(self, prompt):
+    def generate_sentences(self, word_or_phrase):
+        prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
+        Format as JSON:
+        {{
+            "language_pair": "en-tr",
+            "sentences": [
+                {{
+                    "id": 1,
+                    "sentence": "",
+                    "translation": "",
+                    "context": "",
+                    "tags": []
+                }}
+            ]
+        }}"""
+        
         try:
             # Use the correct API method for the new version
             response = openai.ChatCompletion.create(
@@ -26,20 +42,8 @@ class SentenceGenerator:
                 temperature=0.7,
                 max_tokens=500,
             )
-            
-            # Logging response for debugging
-            st.write(f"API Response: {response}")
-            
-            # Extract content from the response and ensure it's correctly formatted
             content = response['choices'][0]['message']['content']
-            
-            # Trying to parse the JSON content
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError as e:
-                st.error(f"Error parsing JSON: {str(e)}")
-                return None
-                
+            return json.loads(content)
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
             return None
@@ -141,27 +145,12 @@ def main():
             # Input word/phrase
             word = st.text_input("Enter a word or phrase:")
             
-            # Define initial editable sentence prompt
-            sentence_prompt = st.text_area(
-                "Edit the sentence generation prompt",
-                "Create 3 short, advanced level sentences using '{word_or_phrase}' in English with Turkish translations.",
-                height=150
-            )
-            
-            # Button to generate sentences with the edited prompt
             if st.button("Generate Sentences"):
                 with st.spinner("Generating sentences..."):
-                    try:
-                        # Replace placeholder with actual word/phrase
-                        prompt = sentence_prompt.replace("{word_or_phrase}", word)
-                        
-                        # Generate sentences using the modified prompt
-                        sentences_data = st.session_state.sentence_gen.generate_sentences(prompt)
-                        if sentences_data:
-                            st.session_state.generated_sets.append(sentences_data)
-                            st.success("Sentences generated successfully!")
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                    sentences_data = st.session_state.sentence_gen.generate_sentences(word)
+                    if sentences_data:
+                        st.session_state.generated_sets.append(sentences_data)
+                        st.success("Sentences generated successfully!")
             
             # Display all generated sets
             if st.session_state.generated_sets:
