@@ -6,44 +6,58 @@ from gtts import gTTS
 import os
 import random
 from tempfile import NamedTemporaryFile
-import shutil
 import pandas as pd
+
+openai.api_key = None  # Initialize with a default value
 
 class SentenceGenerator:
     def __init__(self, api_key):
-        try:
-            # Initialize the OpenAI client with the API key
-            openai.api_key = api_key  # Use the correct OpenAI API client
-            self.model_name = "gpt-3.5-turbo"
-        except Exception as e:
-            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
+        openai.api_key = api_key
+
+    def generate_sentences(self, word_or_phrase, language_pair="en-tr"):
+        if language_pair == "en-tr":
+            prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
+            Format as JSON:
+            {{
+                "language_pair": "en-tr",
+                "sentences": [
+                    {{
+                        "id": 1,
+                        "sentence": "",
+                        "translation": "",
+                        "context": "",
+                        "tags": []
+                    }}
+                ]
+            }}"""
+        elif language_pair == "de-tr":
+            prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in German with Turkish translations.
+            Format as JSON:
+            {{
+                "language_pair": "de-tr",
+                "sentences": [
+                    {{
+                        "id": 1,
+                        "sentence": "",
+                        "translation": "",
+                        "context": "",
+                        "tags": []
+                    }}
+                ]
+            }}"""
         
-    def generate_sentences(self, word_or_phrase):
-        prompt = f"""Create 3 short, simple sentences using '{word_or_phrase}' in English with Turkish translations.
-        Format as JSON:
-        {{
-            "language_pair": "en-tr",
-            "sentences": [
-                {{
-                    "id": 1,
-                    "sentence": "",
-                    "translation": "",
-                    "context": "",
-                    "tags": []
-                }}
-            ]
-        }}"""
-        
         try:
-            # Use the correct API method for the new version
-            response = openai.ChatCompletion.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
+            response = openai.Completion.create(
+                model="text-davinci-003",
+                prompt=prompt,
                 temperature=0.7,
                 max_tokens=500,
             )
-            content = response['choices'][0]['message']['content']
+            content = response.choices[0].text.strip()
             return json.loads(content)
+        except openai.error.OpenAIError as e:
+            st.error(f"OpenAI API Error: {str(e)}")
+            return None
         except Exception as e:
             st.error(f"Error generating sentences: {str(e)}")
             return None
@@ -54,15 +68,15 @@ class AnkiDeckCreator:
             random.randrange(1 << 30, 1 << 31),
             'Sentence Model with Audio',
             fields=[
-                {'name': 'English'},
-                {'name': 'Turkish'},
+                {'name': 'Sentence'},
+                {'name': 'Translation'},
                 {'name': 'Context'},
                 {'name': 'Audio'}
             ],
             templates=[{
                 'name': 'Card 1',
-                'qfmt': '{{English}}<br>{{Audio}}',
-                'afmt': '{{FrontSide}}<hr>{{Turkish}}<br><br>Context: {{Context}}',
+                'qfmt': '{{Sentence}}<br>{{Audio}}',
+                'afmt': '{{FrontSide}}<hr>{{Translation}}<br><br>Context: {{Context}}',
             }]
         )
     
@@ -82,9 +96,7 @@ class AnkiDeckCreator:
                 # Create audio file
                 audio_filename = f"sentence_{random.randrange(1 << 30, 1 << 31)}.mp3"
                 temp_audio = self.create_audio(sentence['sentence'])
-                
-                # Copy the file to the desired location instead of renaming
-                shutil.copy(temp_audio, audio_filename)
+                os.rename(temp_audio, audio_filename)
                 media_files.append(audio_filename)
                 
                 note = genanki.Note(
@@ -133,6 +145,17 @@ def main():
     # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
     
+    # Language pair selection
+    language_pair = st.selectbox(
+        "Select language pair for sentence generation:",
+        ["English - Turkish", "German - Turkish"]
+    )
+    
+    language_map = {
+        "English - Turkish": "en-tr",
+        "German - Turkish": "de-tr"
+    }
+
     # Only proceed if API key is provided
     if api_key:
         try:
@@ -147,7 +170,7 @@ def main():
             
             if st.button("Generate Sentences"):
                 with st.spinner("Generating sentences..."):
-                    sentences_data = st.session_state.sentence_gen.generate_sentences(word)
+                    sentences_data = st.session_state.sentence_gen.generate_sentences(word, language_pair=language_map[language_pair])
                     if sentences_data:
                         st.session_state.generated_sets.append(sentences_data)
                         st.success("Sentences generated successfully!")
@@ -162,8 +185,8 @@ def main():
                     df_data = []
                     for sentence in sentences_data['sentences']:
                         df_data.append({
-                            'English': sentence['sentence'],
-                            'Turkish': sentence['translation'],
+                            'Sentence': sentence['sentence'],
+                            'Translation': sentence['translation'],
                             'Context': sentence['context']
                         })
                     df = pd.DataFrame(df_data)
