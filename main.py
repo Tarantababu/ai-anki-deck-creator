@@ -117,7 +117,16 @@ class AnkiDeckCreator:
             tts.save(temp_file.name)
             return temp_file.name
     
-    def create_deck(self, all_sentences_data, deck_name="Language Learning"):
+    def create_deck(self, all_sentences_data, lang_pair):
+        # Define deck names based on language pair
+        deck_names = {
+            "tr-en": "English - Listen & Repeat",
+            "tr-de": "Deutsch - Hören & Wiederholen"
+        }
+        
+        # Get the appropriate deck name based on the language pair
+        deck_name = deck_names.get(lang_pair, "Language Learning")
+        
         deck = genanki.Deck(random.randrange(1 << 30, 1 << 31), deck_name)
         media_files = []
         
@@ -277,15 +286,23 @@ def main():
                 if st.button("Create Anki Deck from Selected Sets"):
                     with st.spinner("Creating Anki deck..."):
                         anki_creator = AnkiDeckCreator()
-                        output_file = anki_creator.create_deck(st.session_state.selected_sets)
+                        output_file = anki_creator.create_deck(st.session_state.selected_sets, selected_language_pair)
                         
                         with open(output_file, 'rb') as f:
                             deck_data = f.read()
                         
+                        # Use the appropriate deck name for the download file
+                        deck_names = {
+                            "tr-en": "English - Listen & Repeat",
+                            "tr-de": "Deutsch - Hören & Wiederholen"
+                        }
+                        deck_name = deck_names.get(selected_language_pair, "Language Learning")
+                        file_name = f"{deck_name.lower().replace(' ', '_')}.apkg"
+                        
                         st.download_button(
                             label="Download Anki Deck",
                             data=deck_data,
-                            file_name="language_deck.apkg",
+                            file_name=file_name,
                             mime="application/octet-stream"
                         )
                         
