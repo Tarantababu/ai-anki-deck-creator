@@ -28,7 +28,7 @@ class SentenceGenerator:
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
     
-    def get_language_prompt(self, language_pair, difficulty, word_or_phrase):
+    def get_language_prompt(self, language_pair, difficulty, word_or_phrase, topic):
         # Define language configurations
         language_configs = {
             "tr-en": {
@@ -45,10 +45,11 @@ class SentenceGenerator:
         
         config = language_configs[language_pair]
         
-        prompt = f"""Create 3 short, {difficulty} level sentences using '{word_or_phrase}' in {config['to_lang']} with {config['from_lang']} translations for daily conversations.
+        prompt = f"""Create 3 short, {difficulty} level sentences using '{word_or_phrase}' in {config['to_lang']} with {config['from_lang']} translations for {topic.lower()}.
         Format as JSON:
         {{
             "language_pair": "{config['lang_code']}",
+            "topic": "{topic}",
             "sentences": [
                 {{
                     "id": 1,
@@ -61,8 +62,8 @@ class SentenceGenerator:
         }}"""
         return prompt
         
-    def generate_sentences(self, word_or_phrase, language_pair, difficulty):
-        prompt = self.get_language_prompt(language_pair, difficulty, word_or_phrase)
+    def generate_sentences(self, word_or_phrase, language_pair, difficulty, topic):
+        prompt = self.get_language_prompt(language_pair, difficulty, word_or_phrase, topic)
         
         try:
             response = openai.ChatCompletion.create(
@@ -86,11 +87,12 @@ class AnkiDeckCreator:
                 {'name': 'English'},
                 {'name': 'Turkish'},
                 {'name': 'Context'},
-                {'name': 'Audio'}
+                {'name': 'Audio'},
+                {'name': 'Topic'}  # Added topic field
             ],
             templates=[{
                 'name': 'Card 1',
-                'qfmt': '{{English}}<br>{{Audio}}',
+                'qfmt': '{{English}}<br>{{Audio}}<br><small>Topic: {{Topic}}</small>',
                 'afmt': '{{FrontSide}}<hr>{{Turkish}}<br><br>Context: {{Context}}',
             }]
         )
@@ -122,7 +124,8 @@ class AnkiDeckCreator:
                         sentence['sentence'],
                         sentence['translation'],
                         sentence['context'],
-                        f'[sound:{audio_filename}]'
+                        f'[sound:{audio_filename}]',
+                        sentences_data.get('topic', 'General')  # Added topic field
                     ]
                 )
                 deck.add_note(note)
@@ -153,24 +156,51 @@ def main():
         "tr-en": "🇹🇷 Turkish → 🇬🇧 English",
         "tr-de": "🇹🇷 Turkish → 🇩🇪 German"
     }
-    selected_language_pair = st.selectbox(
-        "Select language pair:",
-        options=list(language_pairs.keys()),
-        format_func=lambda x: language_pairs[x]
-    )
     
-    # Difficulty level selection
-    difficulty_levels = [
-        "beginner",
-        "basic",
-        "intermediate",
-        "upper-intermediate",
-        "advanced"
-    ]
-    selected_difficulty = st.selectbox(
-        "Select difficulty level:",
-        options=difficulty_levels
-    )
+    # Create two columns for the dropdowns
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        selected_language_pair = st.selectbox(
+            "Select language pair:",
+            options=list(language_pairs.keys()),
+            format_func=lambda x: language_pairs[x]
+        )
+        
+        # Difficulty level selection
+        difficulty_levels = [
+            "beginner",
+            "basic",
+            "intermediate",
+            "upper-intermediate",
+            "advanced"
+        ]
+        selected_difficulty = st.selectbox(
+            "Select difficulty level:",
+            options=difficulty_levels
+        )
+    
+    with col2:
+        # Topic selection
+        topics = [
+            "Daily conversations and small talk",
+            "Shopping and asking for prices",
+            "Dining out and ordering food",
+            "Asking for directions and using transportation",
+            "Travel and accommodation",
+            "Socializing and discussing hobbies",
+            "Health and emergencies",
+            "Work and professional communication",
+            "Home, family, and daily routines",
+            "Education and learning",
+            "Entertainment and leisure activities",
+            "Technology and troubleshooting",
+            "Cultural topics and traditions"
+        ]
+        selected_topic = st.selectbox(
+            "Select conversation topic:",
+            options=topics
+        )
     
     # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
@@ -192,7 +222,8 @@ def main():
                     sentences_data = st.session_state.sentence_gen.generate_sentences(
                         word,
                         selected_language_pair,
-                        selected_difficulty
+                        selected_difficulty,
+                        selected_topic
                     )
                     if sentences_data:
                         st.session_state.generated_sets.append(sentences_data)
@@ -205,6 +236,7 @@ def main():
                     # Get language pair display text
                     lang_pair_display = language_pairs[sentences_data['language_pair']]
                     st.write(f"Set {idx + 1} - {lang_pair_display}")
+                    st.write(f"Topic: {sentences_data.get('topic', 'General')}")
                     
                     # Create a DataFrame for better display
                     df_data = []
