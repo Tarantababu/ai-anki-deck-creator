@@ -9,6 +9,17 @@ from tempfile import NamedTemporaryFile
 import shutil
 import pandas as pd
 
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'generated_sets' not in st.session_state:
+        st.session_state.generated_sets = []
+    if 'selected_sets' not in st.session_state:
+        st.session_state.selected_sets = []
+    if 'api_key' not in st.session_state:
+        st.session_state.api_key = None
+    if 'sentence_gen' not in st.session_state:
+        st.session_state.sentence_gen = None
+
 class SentenceGenerator:
     def __init__(self, api_key):
         try:
@@ -66,7 +77,70 @@ class SentenceGenerator:
             st.error(f"Error generating sentences: {str(e)}")
             return None
 
-# Rest of the classes remain the same (AnkiDeckCreator and initialize_session_state)
+class AnkiDeckCreator:
+    def __init__(self):
+        self.model = genanki.Model(
+            random.randrange(1 << 30, 1 << 31),
+            'Sentence Model with Audio',
+            fields=[
+                {'name': 'English'},
+                {'name': 'Turkish'},
+                {'name': 'Context'},
+                {'name': 'Audio'}
+            ],
+            templates=[{
+                'name': 'Card 1',
+                'qfmt': '{{English}}<br>{{Audio}}',
+                'afmt': '{{FrontSide}}<hr>{{Turkish}}<br><br>Context: {{Context}}',
+            }]
+        )
+    
+    def create_audio(self, text):
+        """Create audio file and return the filename"""
+        with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+            tts = gTTS(text=text, lang='en')
+            tts.save(temp_file.name)
+            return temp_file.name
+    
+    def create_deck(self, all_sentences_data, deck_name="Language Learning"):
+        deck = genanki.Deck(random.randrange(1 << 30, 1 << 31), deck_name)
+        media_files = []
+        
+        for sentences_data in all_sentences_data:
+            for sentence in sentences_data['sentences']:
+                # Create audio file
+                audio_filename = f"sentence_{random.randrange(1 << 30, 1 << 31)}.mp3"
+                temp_audio = self.create_audio(sentence['sentence'])
+                
+                # Copy the file to the desired location instead of renaming
+                shutil.copy(temp_audio, audio_filename)
+                media_files.append(audio_filename)
+                
+                note = genanki.Note(
+                    model=self.model,
+                    fields=[
+                        sentence['sentence'],
+                        sentence['translation'],
+                        sentence['context'],
+                        f'[sound:{audio_filename}]'
+                    ]
+                )
+                deck.add_note(note)
+        
+        # Create package
+        package = genanki.Package(deck)
+        package.media_files = media_files
+        output_file = 'language_deck.apkg'
+        package.write_to_file(output_file)
+        
+        # Clean up audio files
+        for audio_file in media_files:
+            try:
+                os.remove(audio_file)
+            except OSError:
+                pass
+                
+        return output_file
 
 def main():
     st.title("Anki Language Sentence Generator")
