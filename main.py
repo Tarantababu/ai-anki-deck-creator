@@ -29,7 +29,6 @@ class SentenceGenerator:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
     
     def get_language_prompt(self, language_pair, difficulty, word_or_phrase, topic):
-        # Define language configurations
         language_configs = {
             "tr-en": {
                 "from_lang": "Turkish",
@@ -50,6 +49,7 @@ class SentenceGenerator:
         {{
             "language_pair": "{config['lang_code']}",
             "topic": "{topic}",
+            "word": "{word_or_phrase}",
             "sentences": [
                 {{
                     "id": 1,
@@ -62,6 +62,18 @@ class SentenceGenerator:
         }}"""
         return prompt
         
+    def generate_sentences_batch(self, words, language_pair, difficulty, topic):
+        all_sentences_data = []
+        
+        for word in words:
+            word = word.strip()
+            if word:  # Skip empty strings
+                sentences_data = self.generate_sentences(word, language_pair, difficulty, topic)
+                if sentences_data:
+                    all_sentences_data.append(sentences_data)
+        
+        return all_sentences_data
+    
     def generate_sentences(self, word_or_phrase, language_pair, difficulty, topic):
         prompt = self.get_language_prompt(language_pair, difficulty, word_or_phrase, topic)
         
@@ -75,7 +87,7 @@ class SentenceGenerator:
             content = response['choices'][0]['message']['content']
             return json.loads(content)
         except Exception as e:
-            st.error(f"Error generating sentences: {str(e)}")
+            st.error(f"Error generating sentences for word '{word_or_phrase}': {str(e)}")
             return None
 
 class AnkiDeckCreator:
@@ -84,23 +96,24 @@ class AnkiDeckCreator:
             random.randrange(1 << 30, 1 << 31),
             'Sentence Model with Audio',
             fields=[
-                {'name': 'English'},
-                {'name': 'Turkish'},
+                {'name': 'Target'},
+                {'name': 'Source'},
                 {'name': 'Context'},
                 {'name': 'Audio'},
-                {'name': 'Topic'}  # Added topic field
+                {'name': 'Topic'},
+                {'name': 'Word'}
             ],
             templates=[{
                 'name': 'Card 1',
-                'qfmt': '{{English}}<br>{{Audio}}<br><small>Topic: {{Topic}}</small>',
-                'afmt': '{{FrontSide}}<hr>{{Turkish}}<br><br>Context: {{Context}}',
+                'qfmt': '{{Target}}<br>{{Audio}}<br><small>Topic: {{Topic}}<br>Word: {{Word}}</small>',
+                'afmt': '{{FrontSide}}<hr>{{Source}}<br><br>Context: {{Context}}',
             }]
         )
     
-    def create_audio(self, text):
-        """Create audio file and return the filename"""
+    def create_audio(self, text, lang='en'):
+        """Create audio file with specified language and return the filename"""
         with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-            tts = gTTS(text=text, lang='en')
+            tts = gTTS(text=text, lang=lang)
             tts.save(temp_file.name)
             return temp_file.name
     
@@ -109,12 +122,15 @@ class AnkiDeckCreator:
         media_files = []
         
         for sentences_data in all_sentences_data:
+            lang_pair = sentences_data['language_pair']
+            tts_lang = 'de' if lang_pair == 'tr-de' else 'en'
+            
             for sentence in sentences_data['sentences']:
-                # Create audio file
+                # Create audio file with appropriate language
                 audio_filename = f"sentence_{random.randrange(1 << 30, 1 << 31)}.mp3"
-                temp_audio = self.create_audio(sentence['sentence'])
+                temp_audio = self.create_audio(sentence['sentence'], lang=tts_lang)
                 
-                # Copy the file to the desired location instead of renaming
+                # Copy the file to the desired location
                 shutil.copy(temp_audio, audio_filename)
                 media_files.append(audio_filename)
                 
@@ -125,10 +141,14 @@ class AnkiDeckCreator:
                         sentence['translation'],
                         sentence['context'],
                         f'[sound:{audio_filename}]',
-                        sentences_data.get('topic', 'General')  # Added topic field
+                        sentences_data.get('topic', 'General'),
+                        sentences_data.get('word', '')
                     ]
                 )
                 deck.add_note(note)
+                
+                # Clean up temporary audio file
+                os.remove(temp_audio)
         
         # Create package
         package = genanki.Package(deck)
@@ -148,16 +168,13 @@ class AnkiDeckCreator:
 def main():
     st.title("Anki Language Sentence Generator")
     
-    # Initialize session state
     initialize_session_state()
     
-    # Language pair selection with flags
     language_pairs = {
         "tr-en": "🇹🇷 Turkish → 🇬🇧 English",
         "tr-de": "🇹🇷 Turkish → 🇩🇪 German"
     }
     
-    # Create two columns for the dropdowns
     col1, col2 = st.columns(2)
     
     with col1:
@@ -167,7 +184,6 @@ def main():
             format_func=lambda x: language_pairs[x]
         )
         
-        # Difficulty level selection
         difficulty_levels = [
             "beginner",
             "basic",
@@ -181,7 +197,6 @@ def main():
         )
     
     with col2:
-        # Topic selection
         topics = [
             "Daily conversations and small talk",
             "Shopping and asking for prices",
@@ -202,43 +217,45 @@ def main():
             options=topics
         )
     
-    # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
     
-    # Only proceed if API key is provided
     if api_key:
         try:
-            # Create new generator only if API key changes
             if api_key != st.session_state.api_key:
                 st.session_state.sentence_gen = SentenceGenerator(api_key)
                 st.session_state.api_key = api_key
                 st.success("API key validated successfully!")
             
-            # Input word/phrase
-            word = st.text_input("Enter a word or phrase:")
+            # Input multiple words/phrases
+            words_input = st.text_input(
+                "Enter words or phrases (comma-separated):",
+                help="Enter multiple words or phrases separated by commas, e.g., 'hello, thank you, please'"
+            )
             
             if st.button("Generate Sentences"):
-                with st.spinner("Generating sentences..."):
-                    sentences_data = st.session_state.sentence_gen.generate_sentences(
-                        word,
-                        selected_language_pair,
-                        selected_difficulty,
-                        selected_topic
-                    )
-                    if sentences_data:
-                        st.session_state.generated_sets.append(sentences_data)
-                        st.success("Sentences generated successfully!")
+                if words_input.strip():
+                    words_list = [word.strip() for word in words_input.split(',')]
+                    with st.spinner(f"Generating sentences for {len(words_list)} words..."):
+                        sentences_data_list = st.session_state.sentence_gen.generate_sentences_batch(
+                            words_list,
+                            selected_language_pair,
+                            selected_difficulty,
+                            selected_topic
+                        )
+                        if sentences_data_list:
+                            st.session_state.generated_sets.extend(sentences_data_list)
+                            st.success(f"Generated sentences for {len(sentences_data_list)} words successfully!")
+                else:
+                    st.warning("Please enter at least one word or phrase.")
             
-            # Display all generated sets
             if st.session_state.generated_sets:
                 st.subheader("Generated Sentence Sets")
                 for idx, sentences_data in enumerate(st.session_state.generated_sets):
-                    # Get language pair display text
                     lang_pair_display = language_pairs[sentences_data['language_pair']]
                     st.write(f"Set {idx + 1} - {lang_pair_display}")
                     st.write(f"Topic: {sentences_data.get('topic', 'General')}")
+                    st.write(f"Word: {sentences_data.get('word', '')}")
                     
-                    # Create a DataFrame for better display
                     df_data = []
                     for sentence in sentences_data['sentences']:
                         df_data.append({
@@ -249,7 +266,6 @@ def main():
                     df = pd.DataFrame(df_data)
                     st.dataframe(df)
                     
-                    # Checkbox for selection
                     if st.checkbox(f"Select Set {idx + 1}", key=f"select_{idx}"):
                         if sentences_data not in st.session_state.selected_sets:
                             st.session_state.selected_sets.append(sentences_data)
@@ -257,7 +273,6 @@ def main():
                         if sentences_data in st.session_state.selected_sets:
                             st.session_state.selected_sets.remove(sentences_data)
             
-            # Create and download deck button
             if st.session_state.selected_sets:
                 if st.button("Create Anki Deck from Selected Sets"):
                     with st.spinner("Creating Anki deck..."):
